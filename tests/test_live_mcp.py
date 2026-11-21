@@ -12,7 +12,7 @@ from tests.test_live_capture import snapshot, SCRATCH
 from tools.live_capture import atomic_json
 
 ROOT = Path(__file__).resolve().parents[1]
-TOOLS = {'get_status', 'get_character', 'get_equipment', 'get_bags', 'get_talents', 'get_stats', 'get_bank', 'get_snapshot'}
+TOOLS = {'get_status', 'get_character', 'get_equipment', 'get_bags', 'get_talents', 'get_stats', 'get_bank', 'get_snapshot', 'get_professions'}
 
 
 def fixture(folder, now=100):
@@ -68,6 +68,7 @@ class MCPTests(unittest.TestCase):
     def test_sdk_stdio_initialize_list_and_call(self):
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.stdio import stdio_client
+        from mcp.types import TextContent
         async def exercise(folder):
             params = StdioServerParameters(command=sys.executable, args=[str(ROOT/'tools/live_mcp.py'), '--data-dir', folder])
             async with stdio_client(params) as (read, write):
@@ -83,6 +84,12 @@ class MCPTests(unittest.TestCase):
                     body = json.loads(result.content[0].text)
                     self.assertTrue(body['metadata']['live'])
                     self.assertEqual(body['data']['name'], 'Test')
+                    professions = await session.call_tool('get_professions', {})
+                    assert isinstance(professions.content[0], TextContent)
+                    profession_body = json.loads(professions.content[0].text)
+                    self.assertTrue(profession_body['metadata']['professionsKnown'])
+                    self.assertEqual(profession_body['data'][0]['skillLevel'], 140)
+                    self.assertEqual(profession_body['data'][0]['skillModifier'], 5)
                     bank = await session.call_tool('get_bank', {})
                     self.assertIn('last-seen', json.loads(bank.content[0].text)['metadata']['bankSemantics'])
                     for name in TOOLS:
@@ -95,6 +102,15 @@ class MCPTests(unittest.TestCase):
                     atomic_json(health_path, health)
                     denied = await session.call_tool('get_snapshot', {})
                     self.assertNotIn('data', json.loads(denied.content[0].text))
+                    denied_professions = await session.call_tool('get_professions', {})
+                    assert isinstance(denied_professions.content[0], TextContent)
+                    self.assertNotIn('data', json.loads(denied_professions.content[0].text))
+                    stale_professions = await session.call_tool('get_professions', {'allow_stale': True})
+                    assert isinstance(stale_professions.content[0], TextContent)
+                    stale_profession_body = json.loads(stale_professions.content[0].text)
+                    self.assertFalse(stale_profession_body['metadata']['live'])
+                    self.assertEqual(stale_profession_body['availability'], 'stale')
+                    self.assertEqual(stale_profession_body['data'][0]['skillLevel'], 140)
                     stale = await session.call_tool('get_snapshot', {'allow_stale': True})
                     stale_body = json.loads(stale.content[0].text)
                     self.assertFalse(stale_body['metadata']['live'])
@@ -102,6 +118,13 @@ class MCPTests(unittest.TestCase):
                     self.assertEqual(stale_body['data']['character']['name'], 'Test')
         with tempfile.TemporaryDirectory(dir=SCRATCH) as folder:
             fixture(folder, time.time())
+            envelope_path = Path(folder)/'current.json'
+            envelope = json.loads(envelope_path.read_text())
+            stamp = envelope['snapshot']['capturedAt']
+            envelope['snapshot'].update(professionsKnown=True, professionsCapturedAt=stamp,
+                professions=[dict(name='Mining', category='primary', skillLineId=186,
+                                  skillLevel=140, maxSkillLevel=225, skillModifier=5, known=True)])
+            atomic_json(envelope_path, envelope)
             asyncio.run(asyncio.wait_for(exercise(folder), 25))
 
 

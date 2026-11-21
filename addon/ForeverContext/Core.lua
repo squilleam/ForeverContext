@@ -1,5 +1,5 @@
 -- ForeverContext: read-only character context. No protected actions or disk IO.
-ForeverContext = {version = "1.1.2", bankOpen = false}
+ForeverContext = {version = "1.1.3", bankOpen = false}
 local F = ForeverContext
 local arrayMT = {}
 function F.Array(t) return setmetatable(t or {}, arrayMT) end
@@ -385,6 +385,70 @@ function F.Stats()
     if next(ratings) then stats.combatRatings=ratings end
     return stats
 end
+function F.Professions(warnings)
+    local entries=F.Array()
+    if type(GetProfessions)~='function' or type(GetProfessionInfo)~='function' then
+        warnings[#warnings+1]='Profession APIs unavailable; professions unknown.'
+        return entries,false
+    end
+    local result={pcall(GetProfessions)}
+    if not result[1] then
+        warnings[#warnings+1]='GetProfessions failed; professions unknown.'
+        return entries,false
+    end
+    local known=true
+    local seenIndices,seenIDs={},{}
+    local function integer(value,minimum)
+        if type(value)=='number' and value==value and value~=math.huge and value~=-math.huge
+            and value%1==0 and value>=-2147483647 and value<=2147483647
+            and (minimum==nil or value>=minimum) then return value end
+    end
+    -- Installed ClassicUIForever/Skills/ProfessionsBook.lua verifies five sparse
+    -- slots (two primary, then secondary) and skillLine/rankModifier at 7/8.
+    for slot=1,5 do
+        local raw=result[slot+1]
+        local index=F.Plain(raw)
+        if issecretvalue and issecretvalue(raw) then
+            known=false
+            warnings[#warnings+1]='Profession index restricted; professions unknown.'
+        elseif index~=nil and not integer(index,1) then
+            known=false
+            warnings[#warnings+1]='Profession index invalid; professions unknown.'
+        elseif index~=nil and not seenIndices[index] then
+            seenIndices[index]=true
+            local name,_,rank,cap,_,_,id,modifier=F.Call(GetProfessionInfo,index)
+            if type(name)=='string' then
+                -- Match Python str.isspace() via exact UTF-8 sequences, only for
+                -- the blank check; preserve all bytes of nonblank localized names.
+                local nonWhitespace=name:gsub('[\009-\013\028-\032]','')
+                    :gsub('\194[\133\160]',''):gsub('\225\154\128','')
+                    :gsub('\226\128[\128-\138\168\169\175]','')
+                    :gsub('\226\129\159',''):gsub('\227\128\128','')
+                if nonWhitespace=='' then name=nil end
+            else name=nil end
+            rank,cap,id=integer(rank,0),integer(cap,1),integer(id,1)
+            -- A contradictory API pair must not invalidate the whole gear export.
+            if rank and cap and rank>cap then rank=nil end
+            modifier=integer(modifier)
+            local skillInfo=id and F.Call(C_SkillInfo and C_SkillInfo.GetSkillLineInfoByID,id)
+            if type(skillInfo)=='table' then
+                modifier=integer(F.Plain(skillInfo.modifier)) or modifier
+            end
+            local entry={name=name,category=slot<=2 and 'primary' or 'secondary',
+                skillLineId=id,skillLevel=rank,maxSkillLevel=cap,skillModifier=modifier}
+            entry.known=name~=nil and id~=nil and rank~=nil and cap~=nil and rank<=cap
+            if not entry.known then
+                known=false
+                warnings[#warnings+1]='Profession entry incomplete; missing/invalid values unknown.'
+            end
+            if not id or not seenIDs[id] then
+                entries[#entries+1]=entry
+                if id then seenIDs[id]=true end
+            end
+        end
+    end
+    return entries,known
+end
 local function collect()
     F.secretOmissions=false
     local _, class, classId = F.Call(UnitClass, 'player')
@@ -408,6 +472,8 @@ local function collect()
     snapshot.bank = F.Bank(snapshot.character.guid,snapshot.warnings,snapshot.capturedAt)
     snapshot.talents,snapshot.unspentTalentPoints = F.Talents(snapshot.warnings)
     snapshot.unspentTalentPoints = snapshot.unspentTalentPoints or F.Call(GetUnspentTalentPoints)
+    snapshot.professions,snapshot.professionsKnown = F.Professions(snapshot.warnings)
+    snapshot.professionsCapturedAt = snapshot.capturedAt
     snapshot.stats = F.Stats()
     if not next(snapshot.stats) then snapshot.warnings[#snapshot.warnings+1]='Character stats API unavailable; missing values are unknown, not zero.' end
     local json=F.JSON(snapshot)
@@ -464,7 +530,7 @@ F.events:SetScript('OnEvent',function(self,event,arg1,arg2)
     F.Schedule()
 end)
 for _,event in ipairs({'PLAYER_LOGIN','PLAYER_ENTERING_WORLD','PLAYER_EQUIPMENT_CHANGED','BAG_UPDATE','BAG_UPDATE_DELAYED',
-    'CHARACTER_POINTS_CHANGED','PLAYER_TALENT_UPDATE','TRAIT_CONFIG_UPDATED','TRAIT_NODE_CHANGED',
+    'SKILL_LINES_CHANGED','CHARACTER_POINTS_CHANGED','PLAYER_TALENT_UPDATE','TRAIT_CONFIG_UPDATED','TRAIT_NODE_CHANGED',
     'TRAIT_TREE_CURRENCY_INFO_UPDATED','ACTIVE_COMBAT_CONFIG_CHANGED','UNIT_STATS','UNIT_AURA','UNIT_LEVEL','UNIT_INVENTORY_CHANGED',
     'PLAYER_MONEY','ZONE_CHANGED_NEW_AREA','BANKFRAME_OPENED','BANKFRAME_CLOSED','PLAYERBANKSLOTS_CHANGED','GET_ITEM_INFO_RECEIVED'}) do
     -- Some Classic/Forever builds omit events. Unsupported registration must not prevent loading.

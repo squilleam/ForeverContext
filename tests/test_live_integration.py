@@ -43,7 +43,7 @@ class LivePipelineTests(unittest.TestCase):
         self.assertEqual(complete,expected)
         data=validate_snapshot(complete.decode('utf-8'))
         self.assertIn('SYNTHETIC é龍',data['stats']['fixture'])
-        self.assertEqual(data['addonVersion'],'1.1.2')
+        self.assertEqual(data['addonVersion'],'1.1.3')
         self.assertEqual(json.loads(expected),data)
 
 

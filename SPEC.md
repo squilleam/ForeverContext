@@ -23,6 +23,14 @@ Read-only WoW Forever addon + local snapshot reader. No automation, network call
 - stats object: values from API; must not pretend API absence = real zero
 - warnings array of strings
 
+### Optional profession extension (addon 1.1.3)
+
+Existing schema-1 exports without these fields remain valid; their professions are unknown, not unlearned. New captures include `professions` array, `professionsKnown` boolean, and `professionsCapturedAt` equal to the snapshot's `capturedAt` (the current capture attempt, not a cached last-seen value).
+
+Each entry contains public available fields: `name`, `category` (`primary` or `secondary`), `skillLineId`, `skillLevel`, `maxSkillLevel`, optional signed `skillModifier`, and `known` boolean. A known entry requires a name, positive skill-line ID/cap, and an integer base skill between zero and cap. Modifiers remain separate; do not add them to the base rank in exported data. Missing/restricted fields may be omitted or null only for an unknown entry. Root `professionsKnown=true` requires all entries known. Successful enumeration with no learned professions is known true plus an empty array; failed enumeration is unknown with warnings, never confirmed empty. Duplicate skill-line IDs and malformed fields are rejected.
+
+Collection uses the installed Forever client's `GetProfessions`/`GetProfessionInfo` convention, preserving sparse slots; primary slots are first and second, other returned profession slots are secondary. `C_SkillInfo.GetSkillLineInfoByID(...).modifier` supplies the public skill bonus when available. `SKILL_LINES_CHANGED` schedules a quiet capture. No recipe UI is opened, skills expanded, or game inputs issued.
+
 Each item: itemId, link (FULL original hyperlink incl enchant/random suffix), optional itemString (raw `item:...` payload extracted literally from the source link), name if cached, count, quality, equipLoc, requiredLevel, itemLevel, stats dictionary if available, tooltip array of {left,right} sanitized text. Missing item data stays identified and warning/pending status (never silently drop occupied slots). No computed gear scores or invented weighting.
 
 ## Commands/workflow

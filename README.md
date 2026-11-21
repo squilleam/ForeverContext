@@ -27,7 +27,7 @@ mkdir -p "$TMPDIR"
 
 Generated character data, backups, environments, credentials, and local development handoffs are excluded from Git. Do not force-add those files.
 
-## Live use (1.1.2)
+## Live use (1.1.3)
 
 The compact transmitter is a **256×36-pixel, click-through grid flush against the top-right edge**, with no text label. The companion captures the corresponding bounded top-right client region. Load addon updates with one `/reload`; the companion must also be restarted after its code changes. Version 1.1.1 used the larger top-left grid; old and new corner layouts must not be mixed. Combat/retry behavior was not changed by this cosmetic update.
 
@@ -36,7 +36,7 @@ The compact transmitter is a **256×36-pixel, click-through grid flush against t
 3. Start `LiveCapture.cmd` from this project (or run `.venv/Scripts/python.exe tools/live_capture.py`). Keep the WoW client and strip visible and unoccluded; minimized clients cannot be read. Stop the companion with Ctrl+C. No automatic startup task is installed.
 4. Ask Hermes about your gear. No per-question export or reload is needed while the companion and transmitter are running. Bank data still requires a bank visit and remains last-seen data.
 
-The bridge is **addon pixels → passive local capture → validated local files → read-only MCP tools**. `LiveMCP.cmd` runs the stdio MCP server; it is not an HTTP service. The eight tools expose status, character, equipment, bags, talents, stats, bank and full snapshot. Their default is to deny stale/unknown data, not label old snapshots live. An explicitly requested `allow_stale=true` keeps stale metadata visible.
+The bridge is **addon pixels → passive local capture → validated local files → read-only MCP tools**. `LiveMCP.cmd` runs the stdio MCP server; it is not an HTTP service. The nine tools expose status, character, equipment, bags, talents, stats, professions, bank and full snapshot. Their default is to deny stale/unknown data, not label old snapshots live. An explicitly requested `allow_stale=true` keeps stale metadata visible.
 
 Canonical live files are `data/live/current.json` (validated envelope) and `data/live/status.json` (companion health). Do not assume file existence means connected; use `tools.live_mcp.LiveReader` or the MCP tools to evaluate both files and freshness. SavedVariables outputs `data/latest.*` are separate, not automatically updated by live capture.
 
@@ -59,6 +59,8 @@ Alternatively, double-click `Refresh.cmd` after step 4. It imports the saved sna
 `/fctx` or `/fctx export` opens a copyable JSON export in game if you prefer manual sharing. `/fctx status` reports scan/cache information. `/fctx help` lists commands.
 
 ## What is captured
+
+- Learned professions: actual localized names, primary/secondary category, skill-line IDs, base skill levels, current caps, and separately reported skill bonuses. This includes secondary skills such as Fishing, Cooking and First Aid when the client reports them. No profession or level is inferred from gear or conversation history.
 
 - Equipped item slots and carried bag contents, including full item hyperlinks (random suffixes/enchants preserved).
 - Item tooltips and available client item stats. Uncached data is marked pending rather than fabricated.
@@ -108,7 +110,7 @@ SavedVariables are parsed as a restricted data-only syntax, never with Lua execu
 
 ## Validation boundary
 
-Python reader tests and a Lua 5.1 harness exercise the addon against mocked client APIs. These are developer fixtures, **not your real inventory**. The current suite has 77 tests. Actual snapshot and live capture integration were additionally exercised against the running client; this does not prove every bank, tooltip, combat-restricted API or client layout works. If something fails, retain the exact Lua error and requested status output. The companion keeps screen captures transient and does not store screenshots by default.
+Python reader tests and a Lua 5.1 harness exercise the addon against mocked client APIs. These are developer fixtures, **not your real inventory**. The current suite has 98 tests. Actual snapshot and live capture integration were additionally exercised against the running client before professions were added; the current profession values and Unicode-whitespace handling are mock-tested only, pending an addon reload and fresh in-game export/live capture. Earlier integration does not prove every bank, tooltip, combat-restricted API or client layout works. If something fails, retain the exact Lua error and requested status output. The companion keeps screen captures transient and does not store screenshots by default.
 
 No fake character snapshots are placed in `data/`.
 

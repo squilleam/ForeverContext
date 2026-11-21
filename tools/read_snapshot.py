@@ -202,6 +202,43 @@ def _json_float(token):
     return value
 
 
+def _validate_professions(data):
+    """Optional schema-1 extension; old exports remain readable and unknown."""
+    fields = ('professions', 'professionsKnown', 'professionsCapturedAt')
+    if not any(key in data for key in fields):
+        return
+    entries = data.get('professions')
+    if not isinstance(entries, list) or type(data.get('professionsKnown')) is not bool:
+        raise SnapshotError('Invalid profession enumeration/known flag')
+    observed = data.get('professionsCapturedAt')
+    if not _number(observed) or observed != data['capturedAt']:
+        raise SnapshotError('Profession capture timestamp must match its snapshot')
+    seen = set()
+    for entry in entries:
+        if (not isinstance(entry, dict) or type(entry.get('known')) is not bool or
+                entry.get('category') not in ('primary', 'secondary')):
+            raise SnapshotError('Invalid profession entry')
+        name = entry.get('name')
+        if name is not None and (not isinstance(name, str) or not name.strip()):
+            raise SnapshotError('Invalid profession name')
+        for field, minimum in (('skillLineId', 1), ('skillLevel', 0), ('maxSkillLevel', 1), ('skillModifier', -2147483647)):
+            value = entry.get(field)
+            if value is not None and (type(value) is not int or not minimum <= value <= 2147483647):
+                raise SnapshotError('Invalid profession ' + field)
+        skill_id = entry.get('skillLineId')
+        if skill_id is not None:
+            if skill_id in seen:
+                raise SnapshotError('Duplicate profession skill line')
+            seen.add(skill_id)
+        rank, cap = entry.get('skillLevel'), entry.get('maxSkillLevel')
+        if rank is not None and cap is not None and rank > cap:
+            raise SnapshotError('Profession skill exceeds its cap')
+        if entry['known'] and (name is None or skill_id is None or rank is None or cap is None):
+            raise SnapshotError('Known profession is missing confirmed fields')
+        if data['professionsKnown'] and not entry['known']:
+            raise SnapshotError('Complete profession list contains unknown values')
+
+
 def validate_snapshot(text):
     try:
         data = json.loads(text, object_pairs_hook=_json_object, parse_float=_json_float,
@@ -228,6 +265,7 @@ def validate_snapshot(text):
             raise SnapshotError('Expected array: ' + key)
     if not isinstance(data.get('stats'), dict):
         raise SnapshotError('Expected stats object')
+    _validate_professions(data)
     bank = data.get('bank')
     if (not isinstance(bank, dict) or type(bank.get('known')) is not bool or
             type(bank.get('accessible')) is not bool or not isinstance(bank.get('items'), list)):
@@ -284,6 +322,23 @@ def render_summary(data, now=None, max_age_minutes=30):
         out += ['', '**STALE:** Refresh in game with `/fctx save`, then `/reload`, and import again.']
     if data['capturedAt'] > now + 300:
         out += ['', '**Clock warning:** snapshot is dated in the future.']
+    out += ['', '## Professions']
+    professions = data.get('professions', [])
+    if data.get('professionsKnown') is not True:
+        out.append('Professions unknown or incomplete; missing skills/values are not zero or confirmed unlearned.')
+    elif not professions:
+        out.append('No learned professions reported by a successful API read.')
+    for profession in professions:
+        rank, cap = profession.get('skillLevel'), profession.get('maxSkillLevel')
+        line = '- %s: %s/%s (%s)' % (text(profession.get('name') or 'Unknown profession'),
+                rank if rank is not None else 'unknown', cap if cap is not None else 'unknown',
+                text(profession.get('category', 'unknown')))
+        modifier = profession.get('skillModifier')
+        if modifier is not None:
+            line += '; bonus %+d (separate from base skill)' % modifier
+        if profession.get('known') is not True:
+            line += '; incomplete'
+        out.append(line)
     out += ['', '## Character stats', '```json', json.dumps(data['stats'],ensure_ascii=False,indent=2), '```', '', '## Talents']
     for tree in data['talents']:
         out.append('- ' + text(tree.get('name','Unknown tree')) + ': ' + text(tree.get('points','unknown')) + ' points')
