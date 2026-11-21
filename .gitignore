@@ -1,0 +1,36 @@
+# Local environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.scratch/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Private game snapshots, local backups, and packaged artifacts
+data/
+backups/
+*.zip
+*.log
+
+# Credentials and machine-local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local development handoffs may contain character data or local paths
+*-notes.md
+FIX-NOTES.md
+VERIFICATION.md
+
+# Editor/OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

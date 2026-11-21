@@ -1,0 +1,4 @@
+# Runtime dependencies plus Lua test runtime.
+-r requirements.txt
+# Tests explicitly import lupa.lua51 for the WoW Lua 5.1 runtime.
+lupa==2.8

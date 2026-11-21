@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: ForeverContext
+## Notes: Read-only character, items, talents and last-seen bank JSON export.
+## Author: Local development
+## Version: 1.1.2
+## SavedVariables: ForeverContextExport, ForeverContextDB
+Core.lua
+Live.lua
+UI.lua

@@ -1,0 +1,4 @@
+# Tested live-bridge runtime. Snapshot-only reader uses the Python standard library.
+mcp==2.3.0
+Pillow==13.0.0
+mss==10.2.0
